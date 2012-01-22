@@ -1,3 +1,85 @@
+// Copyright 2012 Google Inc. All rights reserved.
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file.
+
+// Package options provides a command line option parser.
+//
+// This package is meant as an alternative to the core flag package. It
+// is more powerful without attempting to support every possible feature
+// some parsing library ever introduced. It is arguably easier to use.
+//
+// Usage:
+//
+// Create an OptionsSpec that documents your program's allowed flags. This
+// begins with a free-text synopsis of your command line interface, then
+// a line containing only two dashes, then a series of option specifications:
+//
+//   import "options"
+//   s := options.NewOptions(`
+//   cat - concatenate files to standard input
+//   Usage: cat [OPTIONS] file...
+//   This version of cat supports character set conversion.
+//   Fancifully, you can say "-r 3" and have everything told you three times.
+//   --
+//   n,numerate,number     number input lines
+//   e,escape              escape nonprintable characters
+//   i,input-encoding=     charset input is encoded in [utf-8]
+//   o,output-encoding=    charset output is encoded in [utf-8]
+//   r,repeat=             repeat every line some number of times [1]
+//   v,verbose             be verbose
+//   `)
+//
+// Then parse the command line:
+//
+//   opt, flags, extra := s.Parse(os.Args)
+//   
+// Options may have any number of aliases; the last one is the "canonical"
+// name and the one your program must use when reading values.
+//
+//   opt.Get("input-encoding")  // Returns "utf-8", or whatever user set.
+//   opt.Get("i")               // Error! No option with that canonical name.
+//   opt.Get("number")          // Returns "" if the user didn't specify it.
+//
+// Get returns a string. Several very simple conversions are provided but you
+// are encouraged to write your own if you need more.
+//
+//   opt.GetBool("escape")      // false (by default)
+//   opt.GetBool("number")      // false (by default)
+//   opt.GetInt("repeat")       // 1 (by default)
+//
+// Options either take a required argument or take no argument. Non-argument
+// options have useful values exposed as bool and ints.
+//
+//   // cat -v -v -v
+//   opt.GetBool("verbose")     // true
+//   opt.GetInt("verbose")      // 3
+//
+// The user can say either "--foo=bar" or "--foo bar".
+//
+// Parsing stops if "--" is given on the command line.
+//
+// The "extra" return value of Parse contains all non-option command line
+// input. In the case of a cat command, this would be the filenames to concat.
+//
+// By default, options permits such extra values. Setting UnknownValuesFatal
+// causes it to panic when it enconters them instead.
+//
+// The "flags" return value of Parse contains the series of flags as given on
+// the command line, including repeated ones (which are suppressed in opt --
+// it only contains the last value). This allows you to do your own handling
+// of repeated options easily.
+//
+// By default, options does not permit unknown flags. Setting
+// UnknownOptionsFatal to false causes them to be recorded in "flags" instead.
+// Note that since they have no canonical name, they cannot be accessed via
+// opt. Also note that since options does not know about the meaning of these
+// flags, it has to guess whether they consume the next argument or not. This
+// is currently done naively by peeking at the first character of the next
+// argument.
+//
+// BUG(gaal): Clustering of short options ("cat -vvv") is not yet supported.
+// BUG(gaal): Negated options ("--no-frobulate") are not yet supported.
+// BUG(gaal): Option groups are not yet supported.
 package options
 
 import (
@@ -6,11 +88,16 @@ import (
 	"strings"
 )
 
+// Options represents the known formal options provided on the command line.
 type Options struct {
 	opts  map[string]string
 	known map[string]bool
 }
 
+// Get returns the value of an option, which must be known to this parse.
+// Options that take an argument return the argument. Options with no argument
+// return values hinting whether they were specified or not; GetInt or GetBool
+// may be more suited for looking them up.
 func (o *Options) Get(flag string) string {
 	val, ok := o.opts[flag]
 	if !ok {
@@ -21,6 +108,8 @@ func (o *Options) Get(flag string) string {
 	return val
 }
 
+// GetInt returns the value of an option as an integer. The empty string is
+// treated as zero, but otherwise the option must parse or a panic occurs.
 func (o *Options) GetInt(flag string) int {
 	val := o.Get(flag)
 	if val == "" {
@@ -33,17 +122,47 @@ func (o *Options) GetInt(flag string) int {
 	return num
 }
 
+// GetBool returns the value of an option as a bool. All values are treated
+// as true except for the following which yield false:
+//   "" (empty), "0", "false", "off", "nil", "null", "no"
 func (o *Options) GetBool(flag string) bool {
 	val := o.Get(flag)
 	if val == "" || val == "0" || val == "false" ||
-		val == "off" || val == "nil" || val == "no" {
+		val == "off" || val == "nil" || val == "null" || val == "no" {
 		return false
 	}
 	return true
 }
 
+// Have returns false when an option has no default value and was not given
+// on the command line, or true otherwise.
+func (o *Options) Have(flag string) bool {
+    if !o.known[flag] {
+        panic(fmt.Sprintf("[Programmer error] Unknown option: %s\ndump: %+v", flag, *o))
+    }
+    _, ok := o.opts[flag]
+    return ok
+}
+
+// GetAll is a convenience function which scans the "flags" return value of
+// OptionSpec.Parse, and gathers all the values of a given option. This must
+// be a required-argument option.
+func GetAll(flag string, flags [][]string) []string {
+    out := make([]string, 0)
+    for _, val := range flags {
+        if (val[0] == flag) {
+            if (len(val) != 2) {
+                panic("[Programmer error] Option does not appear to take arguments: " + flag)
+            }
+            out = append(out, val[1])
+        }
+    }
+    return out
+}
+
+// OptionSpec represents the specification of a command line interface.
 type OptionSpec struct {
-	Usage               string
+	Usage               string // Formatted usage string
 	UnknownOptionsFatal bool // Whether to die on unknown flags [true]
 	UnknownValuesFatal  bool // Whether to die un extra nonflags [false]
 	aliases             map[string]string
@@ -52,6 +171,22 @@ type OptionSpec struct {
 	requiresArg         map[string]bool
 }
 
+// SetUnknownOptionsFatal is a conveience function designed to be chained
+// after NewOptions.
+func (s *OptionSpec) SetUnknownOptionsFatal(val bool) *OptionSpec {
+    s.UnknownOptionsFatal = val;
+    return s
+}
+
+// SetUnknownValuesFatal is a conveience function designed to be chained
+// after NewOptions.
+func (s *OptionSpec) SetUnknownValuesFatal(val bool) *OptionSpec {
+    s.UnknownValuesFatal = val;
+    return s
+}
+
+// NewOptions takes a string speficiation of a command line interface and
+// returns an OptionSpec for you to call Parse on.
 func NewOptions(spec string) *OptionSpec {
 	// TODO(gaal): move to constant
 	flagSpec := regexp.MustCompile(`^([-\w,]+)(=?)\s+(.*)$`)
@@ -114,6 +249,12 @@ func NewOptions(spec string) *OptionSpec {
 	return s
 }
 
+// Parse performs the actual parsing of a command line according to an
+// OptionSpec.
+// It returns three values: opt, flags, extra; see the package description
+// for an overview of what they mean and how they are used.
+// In case of parse error, a panic is thrown.
+// TODO(gaal): decide if gentler error signalling is more useful.
 func (s *OptionSpec) Parse(args []string) (Options, [][]string, []string) {
 	// TODO(gaal): extract to constant.
 	flagRe := regexp.MustCompile(`^((--?)([-\w]+))(=(.*))?$`)
@@ -139,7 +280,7 @@ func (s *OptionSpec) Parse(args []string) (Options, [][]string, []string) {
 		flagParts := flagRe.FindStringSubmatch(val)
 		if flagParts == nil { // This is not a flag.
 			if s.UnknownValuesFatal {
-				panic("Unexpected argument: " + val)
+				panic("Unexpected argument: " + val + "\n" + s.Usage)
 			}
 			extra = append(extra, val)
 			continue
@@ -175,20 +316,20 @@ func (s *OptionSpec) Parse(args []string) (Options, [][]string, []string) {
 					recordOptionValue(*nextArg)
 					i++
 				} else {
-					panic("Option requires argument: " + canonical)
+					panic("Option requires argument: " + canonical + "\n" + s.Usage)
 				}
 			} else {
 				// TODO(gaal): decide what to do: we were given an argument to
 				// an option that doesn't take one. Do we treat this as an
 				// optional argument and just record it? Panic?
 				if haveSelfValue {
-					panic("Option does not take argument: " + canonical)
+					panic("Option does not take argument: " + canonical + "\n" + s.Usage)
 				}
 				recordOptionNoValue()
 			}
 		} else { // Unknown option: try to do the right thing.
 			if s.UnknownOptionsFatal {
-				panic("Unexpected option argument: " + val)
+				panic("Unexpected option argument: " + val + "\n" + s.Usage)
 			}
 			if haveSelfValue {
 				recordOptionValue(selfValue)

@@ -63,7 +63,7 @@ func TestParse_extra(t *testing.T) {
 	ExpectEquals(t, [][]string{[]string{"--ccc", "myval"}}, flags, "flags specified")
 	ExpectEquals(t, []string{"extra1", "extra2"}, extra, "extra args given")
 
-	s.UnknownValuesFatal = true
+	s.SetUnknownValuesFatal(true)
 	ExpectDies(t, func() {
 		s.Parse([]string{"extra1", "--ccc", "myval", "extra2"})
 	}, "dies on extras when asked to")
@@ -76,7 +76,7 @@ func TestParse_unknownFlags(t *testing.T) {
 		s.Parse([]string{"--ccc", "myval", "--unk"})
 	}, "dies on unknown options unless asked not to")
 
-	s.UnknownOptionsFatal = false
+	s.SetUnknownOptionsFatal(false)
 	opt, flags, extra := s.Parse([]string{"--unk1", "--ccc", "myval", "--unk2", "val2", "--unk3"})
 	ExpectEquals(t, "myval", opt.Get("ccc"), "Get")
 	ExpectEquals(t, [][]string{
@@ -111,7 +111,20 @@ d,bbb,eee an option with dupe`
 	ExpectDies(t, func() { NewOptions(spec) })
 }
 
-// These are small little testing utilities that I like. May move it to a separate module one day.
+func TestGetAll(t *testing.T) {
+	ExpectEquals(
+        t,
+        []string{},
+		GetAll("elk", [][]string{[]string{"foo", "aaa"}, []string{"bar"}, []string{"foo", "bbb"}}),
+		"GetAll - nothing there")
+	ExpectEquals(
+        t,
+        []string{"aaa", "bbb"},
+		GetAll("foo", [][]string{[]string{"foo", "aaa"}, []string{"bar"}, []string{"foo", "bbb"}}),
+		"GetAll")
+}
+
+// These are little testing utilities that I like. May move to a separate module one day.
 
 func Wrap(vs ...interface{}) interface{} {
 	return vs
@@ -141,5 +154,5 @@ func TestExpectDies(t *testing.T) {
 	ExpectDies(t, func() { panic("aaaaahh") }, "simple panic dies")
 	t1 := new(testing.T)
 	ExpectDies(t1, func() {}, "doesn't die")
-	ExpectEquals(t, Wrap(true), Wrap(t1.Failed()), "ExpectDies on something that doesn't die fails")
+	ExpectEquals(t, true, t1.Failed(), "ExpectDies on something that doesn't die fails")
 }
