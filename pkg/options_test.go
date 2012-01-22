@@ -5,12 +5,10 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
-	//"strings"
 )
 
 func TestNewOptions_trivial(t *testing.T) {
 	s := NewOptions("Hi\n--\na,bbb,ccc= doc [def]")
-	//fmt.Printf("%#v", s)
 	ExpectEquals(t, "ccc", s.aliases["ccc"], "canonical name")
 	ExpectEquals(t, "ccc", s.aliases["a"], "alternate name")
 	ExpectEquals(t, "ccc", s.aliases["bbb"], "alternate name")
@@ -54,6 +52,11 @@ func TestParse_trivialSelfVal(t *testing.T) {
 	test("--ccc")
 	test("--bbb")
 	test("-a")
+}
+
+func TestParse_missingArgument(t *testing.T) {
+	s := NewOptions("Hi\n--\na,bbb,ccc= doc [def]")
+	ExpectDies(t, func() { s.Parse([]string{"--ccc"}) }, "missing required param")
 }
 
 func TestParse_extra(t *testing.T) {
@@ -113,22 +116,18 @@ d,bbb,eee an option with dupe`
 
 func TestGetAll(t *testing.T) {
 	ExpectEquals(
-        t,
-        []string{},
+		t,
+		[]string{},
 		GetAll("elk", [][]string{[]string{"foo", "aaa"}, []string{"bar"}, []string{"foo", "bbb"}}),
 		"GetAll - nothing there")
 	ExpectEquals(
-        t,
-        []string{"aaa", "bbb"},
+		t,
+		[]string{"aaa", "bbb"},
 		GetAll("foo", [][]string{[]string{"foo", "aaa"}, []string{"bar"}, []string{"foo", "bbb"}}),
 		"GetAll")
 }
 
 // These are little testing utilities that I like. May move to a separate module one day.
-
-func Wrap(vs ...interface{}) interface{} {
-	return vs
-}
 
 func ExpectEquals(t *testing.T, expected, actual interface{}, desc ...string) {
 	if !reflect.DeepEqual(expected, actual) {

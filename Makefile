@@ -1,7 +1,15 @@
 include $(GOROOT)/src/Make.inc
 
-TARG=options
-GOFILES=\
-    options.go\
+install:
+	cd pkg && gomake install
 
-include $(GOROOT)/src/Make.pkg
+test:
+	cd pkg && gomake test
+
+example:
+	cd pkg && gomake
+	cd example && gomake example
+
+clean:
+	cd pkg && gomake clean
+	cd example && gomake clean

@@ -11,7 +11,7 @@ minor deviations.
 * On the code side, you must access the opt structure with canonical option
 names only. This is intended to reduce programmer errors.
 * When I support negated options, I will not support unnegated aliases
-for them as that can lead to more confusion than I deem worth it.
+for them as that can lead to more confusion than I deem worth harboring.
 
 This package is distributed under the MIT/X license.
 

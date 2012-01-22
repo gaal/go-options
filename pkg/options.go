@@ -10,7 +10,7 @@
 //
 // Usage:
 //
-// Create an OptionsSpec that documents your program's allowed flags. This
+// Create an OptionSpec that documents your program's allowed flags. This
 // begins with a free-text synopsis of your command line interface, then
 // a line containing only two dashes, then a series of option specifications:
 //
@@ -31,8 +31,9 @@
 //
 // Then parse the command line:
 //
-//   opt, flags, extra := s.Parse(os.Args)
-//   
+//   opt, flags, extra := s.Parse(os.Args[1:])
+//
+// (For another way to do this, see the secion "Callback interface" below.)
 // Options may have any number of aliases; the last one is the "canonical"
 // name and the one your program must use when reading values.
 //
@@ -77,6 +78,35 @@
 // is currently done naively by peeking at the first character of the next
 // argument.
 //
+// Callback interface:
+//
+// If you prefer a more type-safe, static interface to your options, you can
+// still have it with options. Instead of (or in addition to) looking at opt
+// and friends, use OptionSpec.SetCallbacks:
+//
+//   var (foo string; bar int; baz float64; lst []string, verbose bool)
+//
+//   func myParseArgumentCallback(
+//       spec OptionSpec, option string, argument string) {
+//     switch option {
+//     case "my-string-option":  foo = argument
+//     case "my-int-option":     fmt.Sscanf(argument, "%d", &bar)
+//     case "my-decimal-option": fmt.Sscanf(argument, "%f", &baz)
+//     case "my-list-option":    lst = append(lst, argument)
+//     default: spec.PrintUsageAndExit("Unknown option: " + option)
+//     }
+//   }
+//
+//   func myParseNoArgumentCallback(spec OptionSpec, option string) {
+//     switch option {
+//     case "verbose": verbose = true
+//     case "help":    spec.PrintUsageAndExit("")  // No error
+//     default: spec.PrintUsageAndExit("Unknown option: " + option)
+//     }
+//   }
+//
+//   spec.SetCallbacks(myParseArgumentCallback, myParseNoArgumentCallback)
+//
 // BUG(gaal): Clustering of short options ("cat -vvv") is not yet supported.
 // BUG(gaal): Negated options ("--no-frobulate") are not yet supported.
 // BUG(gaal): Option groups are not yet supported.
@@ -84,6 +114,7 @@ package options
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -137,34 +168,36 @@ func (o *Options) GetBool(flag string) bool {
 // Have returns false when an option has no default value and was not given
 // on the command line, or true otherwise.
 func (o *Options) Have(flag string) bool {
-    if !o.known[flag] {
-        panic(fmt.Sprintf("[Programmer error] Unknown option: %s\ndump: %+v", flag, *o))
-    }
-    _, ok := o.opts[flag]
-    return ok
+	if !o.known[flag] {
+		panic(fmt.Sprintf("[Programmer error] Unknown option: %s\ndump: %+v", flag, *o))
+	}
+	_, ok := o.opts[flag]
+	return ok
 }
 
 // GetAll is a convenience function which scans the "flags" return value of
 // OptionSpec.Parse, and gathers all the values of a given option. This must
 // be a required-argument option.
 func GetAll(flag string, flags [][]string) []string {
-    out := make([]string, 0)
-    for _, val := range flags {
-        if (val[0] == flag) {
-            if (len(val) != 2) {
-                panic("[Programmer error] Option does not appear to take arguments: " + flag)
-            }
-            out = append(out, val[1])
-        }
-    }
-    return out
+	out := make([]string, 0)
+	for _, val := range flags {
+		if val[0] == flag {
+			if len(val) != 2 {
+				panic("[Programmer error] Option does not appear to take arguments: " + flag)
+			}
+			out = append(out, val[1])
+		}
+	}
+	return out
 }
 
 // OptionSpec represents the specification of a command line interface.
 type OptionSpec struct {
 	Usage               string // Formatted usage string
-	UnknownOptionsFatal bool // Whether to die on unknown flags [true]
-	UnknownValuesFatal  bool // Whether to die un extra nonflags [false]
+	UnknownOptionsFatal bool   // Whether to die on unknown flags [true]
+	UnknownValuesFatal  bool   // Whether to die un extra nonflags [false]
+	RequiredArgCallback func(OptionSpec, string, string)
+	NoArgCallback       func(OptionSpec, string)
 	aliases             map[string]string
 	defaults            map[string]string
 	short               map[string]bool // Single-char aliases, for clustering
@@ -174,15 +207,15 @@ type OptionSpec struct {
 // SetUnknownOptionsFatal is a conveience function designed to be chained
 // after NewOptions.
 func (s *OptionSpec) SetUnknownOptionsFatal(val bool) *OptionSpec {
-    s.UnknownOptionsFatal = val;
-    return s
+	s.UnknownOptionsFatal = val
+	return s
 }
 
 // SetUnknownValuesFatal is a conveience function designed to be chained
 // after NewOptions.
 func (s *OptionSpec) SetUnknownValuesFatal(val bool) *OptionSpec {
-    s.UnknownValuesFatal = val;
-    return s
+	s.UnknownValuesFatal = val
+	return s
 }
 
 // NewOptions takes a string speficiation of a command line interface and
@@ -213,6 +246,10 @@ func NewOptions(spec string) *OptionSpec {
 			}
 		case 1:
 			{
+				if l == "" {
+					s.Usage += "\n"
+					continue
+				}
 				parts := flagSpec.FindStringSubmatch(l)
 				if parts == nil {
 					panic(fmt.Sprint(n, ": no parse: ", l))
@@ -346,6 +383,20 @@ func (s *OptionSpec) Parse(args []string) (Options, [][]string, []string) {
 	}
 
 	return opt, flags, extra
+}
+
+// PrintUsageAndExit writes the usage string and exits the program.
+// If an error message is given, usage is written to standard error.
+// Otherwise, it is written to standard output; this makes invocations
+// such as "myprog --help | less" work as the user expects.
+// Likewise, the status code is zero when no error was given.
+func (s *OptionSpec) PrintUsageAndExit(err string) {
+	if err == "" {
+		fmt.Println(s.Usage)
+		os.Exit(0)
+	}
+	fmt.Fprintf(os.Stderr, "%s\n%s\n", err, s.Usage)
+	os.Exit(1)
 }
 
 func smap(f func(string) string, vs []string) []string {
