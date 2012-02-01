@@ -32,28 +32,30 @@ v,verbose             be verbose
 
 func myParseCallback(spec *options.OptionSpec, option string, argument *string) {
 	if argument != nil {
-		switch option {
-		case "i", "input-encoding":
+		switch spec.GetCanonical(option) {
+		case "input-encoding":
 			in = *argument
-		case "o", "output-encoding":
+		case "output-encoding":
 			out = *argument
-		case "r", "repeat":
+		case "repeat":
 			fmt.Scanf(*argument, "%d", &r)
 		default:
 			spec.PrintUsageAndExit("Unknown option: " + option)
 		}
 	} else {
-		switch option {
-		case "n", "number":
+		switch spec.GetCanonical(option) {
+		case "number":
 			n = true
-		case "e", "escape":
+		case "escape":
 			e = true
-		case "v", "verbose":
+		case "verbose":
 			v++
-		case "h", "help":
-			spec.PrintUsageAndExit("") // No error
 		default:
-			spec.PrintUsageAndExit("Unknown option: " + option)
+			if option == "help" {
+				spec.PrintUsageAndExit("") // No error
+			} else {
+				spec.PrintUsageAndExit("Unknown option: " + option)
+			}
 		}
 	}
 }

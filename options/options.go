@@ -291,6 +291,13 @@ func NewOptions(spec string) *OptionSpec {
 	return s
 }
 
+// GetCanonical returns the canonical name of an option, or the empty string if
+// the option is unkown. Useful to tidy up switch statements when using the
+// custom callback interface.
+func (s *OptionSpec) GetCanonical(option string) string {
+	return s.aliases[option]
+}
+
 // Parse performs the actual parsing of a command line according to an
 // OptionSpec.
 // It returns three values: opt, flags, extra; see the package description
