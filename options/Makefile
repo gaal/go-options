@@ -1,6 +1,6 @@
 include $(GOROOT)/src/Make.inc
 
-TARG=github.com/gaal/go-options
+TARG=github.com/gaal/go-options/options
 GOFILES=\
     options.go\
 

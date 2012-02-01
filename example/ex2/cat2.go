@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gaal/go-options"
+	"github.com/gaal/go-options/options"
 )
 
 // Note how with callbacks, the programmer is responsible for default values.

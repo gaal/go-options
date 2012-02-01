@@ -6,7 +6,7 @@ import (
     "fmt"
     "os"
 
-    "github.com/gaal/go-options"
+    "github.com/gaal/go-options/options"
 )
 
 const mySpec = `
