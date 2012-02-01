@@ -2,114 +2,116 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
-// Package options provides a command line option parser.
-//
-// This package is meant as an alternative to the core flag package. It
-// is more powerful without attempting to support every possible feature
-// some parsing library ever introduced. It is arguably easier to use.
-//
-// Usage:
-//
-// Create an OptionSpec that documents your program's allowed flags. This
-// begins with a free-text synopsis of your command line interface, then
-// a line containing only two dashes, then a series of option specifications:
-//
-//   import "options"
-//   s := options.NewOptions(`
-//   cat - concatenate files to standard input
-//   Usage: cat [OPTIONS] file...
-//   This version of cat supports character set conversion.
-//   Fancifully, you can say "-r 3" and have everything told you three times.
-//   --
-//   n,numerate,number     number input lines
-//   e,escape              escape nonprintable characters
-//   i,input-encoding=     charset input is encoded in [utf-8]
-//   o,output-encoding=    charset output is encoded in [utf-8]
-//   r,repeat=             repeat every line some number of times [1]
-//   v,verbose             be verbose
-//   `)
-//
-// Then parse the command line:
-//
-//   opt, flags, extra := s.Parse(os.Args[1:])
-//
-// (For another way to do this, see the secion "Callback interface" below.)
-// Options may have any number of aliases; the last one is the "canonical"
-// name and the one your program must use when reading values.
-//
-//   opt.Get("input-encoding")  // Returns "utf-8", or whatever user set.
-//   opt.Get("i")               // Error! No option with that canonical name.
-//   opt.Get("number")          // Returns "" if the user didn't specify it.
-//
-// Get returns a string. Several very simple conversions are provided but you
-// are encouraged to write your own if you need more.
-//
-//   opt.GetBool("escape")      // false (by default)
-//   opt.GetBool("number")      // false (by default)
-//   opt.GetInt("repeat")       // 1 (by default)
-//
-// Options either take a required argument or take no argument. Non-argument
-// options have useful values exposed as bool and ints.
-//
-//   // cat -v -v -v
-//   opt.GetBool("verbose")     // true
-//   opt.GetInt("verbose")      // 3
-//
-// The user can say either "--foo=bar" or "--foo bar".
-//
-// Parsing stops if "--" is given on the command line.
-//
-// The "extra" return value of Parse contains all non-option command line
-// input. In the case of a cat command, this would be the filenames to concat.
-//
-// By default, options permits such extra values. Setting UnknownValuesFatal
-// causes it to panic when it enconters them instead.
-//
-// The "flags" return value of Parse contains the series of flags as given on
-// the command line, including repeated ones (which are suppressed in opt --
-// it only contains the last value). This allows you to do your own handling
-// of repeated options easily.
-//
-// By default, options does not permit unknown flags. Setting
-// UnknownOptionsFatal to false causes them to be recorded in "flags" instead.
-// Note that since they have no canonical name, they cannot be accessed via
-// opt. Also note that since options does not know about the meaning of these
-// flags, it has to guess whether they consume the next argument or not. This
-// is currently done naively by peeking at the first character of the next
-// argument.
-//
-// Callback interface:
-//
-// If you prefer a more type-safe, static interface to your options, you can
-// still have it with options. Instead of (or in addition to) looking at opt
-// and friends, use OptionSpec.SetCallbacks:
-//
-//   var (foo string; bar int; baz float64; lst []string, verbose bool)
-//
-//   func myParseArgumentCallback(
-//       spec OptionSpec, option string, argument string) {
-//     switch option {
-//     case "my-string-option":  foo = argument
-//     case "my-int-option":     fmt.Sscanf(argument, "%d", &bar)
-//     case "my-decimal-option": fmt.Sscanf(argument, "%f", &baz)
-//     case "my-list-option":    lst = append(lst, argument)
-//     default: spec.PrintUsageAndExit("Unknown option: " + option)
-//     }
-//   }
-//
-//   func myParseNoArgumentCallback(spec OptionSpec, option string) {
-//     switch option {
-//     case "verbose": verbose = true
-//     case "help":    spec.PrintUsageAndExit("")  // No error
-//     default: spec.PrintUsageAndExit("Unknown option: " + option)
-//     }
-//   }
-//
-//   spec.SetCallbacks(myParseArgumentCallback, myParseNoArgumentCallback)
-//
-// BUG(gaal): Clustering of short options ("cat -vvv") is not yet supported.
-// BUG(gaal): Negated options ("--no-frobulate") are not yet supported.
-// BUG(gaal): Option groups are not yet supported.
+/*
+Package options provides a command line option parser.
+
+This package is meant as an alternative to the core flag package. It
+is more powerful without attempting to support every possible feature
+some parsing library ever introduced. It is arguably easier to use.
+
+Usage:
+
+Create an OptionSpec that documents your program's allowed flags. This
+begins with a free-text synopsis of your command line interface, then
+a line containing only two dashes, then a series of option specifications:
+
+  import "options"
+  s := options.NewOptions(`
+  cat - concatenate files to standard input
+  Usage: cat [OPTIONS] file...
+  This version of cat supports character set conversion.
+  Fancifully, you can say "-r 3" and have everything told you three times.
+  --
+  n,numerate,number     number input lines
+  e,escape              escape nonprintable characters
+  i,input-encoding=     charset input is encoded in [utf-8]
+  o,output-encoding=    charset output is encoded in [utf-8]
+  r,repeat=             repeat every line some number of times [1]
+  v,verbose             be verbose
+  `)
+
+Then parse the command line:
+
+  opt, flags, extra := s.Parse(os.Args[1:])
+
+(For another way to do this, see the secion "Callback interface" below.)
+
+Options may have any number of aliases; the last one is the "canonical"
+name and the one your program must use when reading values.
+
+  opt.Get("input-encoding")  // Returns "utf-8", or whatever user set.
+  opt.Get("i")               // Error! No option with that canonical name.
+  opt.Get("number")          // Returns "" if the user didn't specify it.
+
+Get returns a string. Several very simple conversions are provided but you
+are encouraged to write your own if you need more.
+
+  opt.GetBool("escape")      // false (by default)
+  opt.GetBool("number")      // false (by default)
+  opt.GetInt("repeat")       // 1 (by default)
+
+Options either take a required argument or take no argument. Non-argument
+options have useful values exposed as bool and ints.
+
+  // cat -v -v -v
+  opt.GetBool("verbose")     // true
+  opt.GetInt("verbose")      // 3
+
+The user can say either "--foo=bar" or "--foo bar".
+
+Parsing stops if "--" is given on the command line.
+
+The "extra" return value of Parse contains all non-option command line
+input. In the case of a cat command, this would be the filenames to concat.
+
+By default, options permits such extra values. Setting UnknownValuesFatal
+causes it to panic when it enconters them instead.
+
+The "flags" return value of Parse contains the series of flags as given on
+the command line, including repeated ones (which are suppressed in opt --
+it only contains the last value). This allows you to do your own handling
+of repeated options easily.
+
+By default, options does not permit unknown flags. Setting
+UnknownOptionsFatal to false causes them to be recorded in "flags" instead.
+Note that since they have no canonical name, they cannot be accessed via
+opt. Also note that since options does not know about the meaning of these
+flags, it has to guess whether they consume the next argument or not. This
+is currently done naively by peeking at the first character of the next
+argument.
+
+Callback interface:
+
+If you prefer a more type-safe, static interface to your options, you can
+still use options to get it. Instead of (or in addition to) looking at opt
+and friends, use OptionSpec.SetCallback:
+
+  var (foo string; bar int; baz float64; lst []string, verbose bool)
+
+  func myParseCallback(spec *OptionSpec, option string, argument *string) {
+    if argument != nil {
+      switch option {
+      case "string-option":  foo = *argument
+      case "int-option":     fmt.Sscanf(*argument, "%d", &bar)
+      case "decimal-option": fmt.Sscanf(*argument, "%f", &baz)
+      case "list-option":    lst = append(lst, *argument)
+      default: spec.PrintUsageAndExit("Unknown option: " + option)
+      }
+    } else {
+      switch option {
+      case "verbose": verbose = true
+      case "help":    spec.PrintUsageAndExit("")  // No error
+      default:        spec.PrintUsageAndExit("Unknown option: " + option)
+    }
+  }
+
+  spec.SetCallback(myParseCallback)
+  _, _, extra := spec.Parse(os.Args[1:])
+
+BUG(gaal): Clustering of short options ("cat -vvv") is not yet supported.
+BUG(gaal): Negated options ("--no-frobulate") are not yet supported.
+BUG(gaal): Option groups are not yet supported.
+*/
 package options
 
 import (
@@ -193,15 +195,16 @@ func GetAll(flag string, flags [][]string) []string {
 
 // OptionSpec represents the specification of a command line interface.
 type OptionSpec struct {
-	Usage               string // Formatted usage string
-	UnknownOptionsFatal bool   // Whether to die on unknown flags [true]
-	UnknownValuesFatal  bool   // Whether to die un extra nonflags [false]
-	RequiredArgCallback func(OptionSpec, string, string)
-	NoArgCallback       func(OptionSpec, string)
+	Usage               string         // Formatted usage string
+	UnknownOptionsFatal bool           // Whether to die on unknown flags [true]
+	UnknownValuesFatal  bool           // Whether to die un extra nonflags [false]
+	Exit                func(code int) // os.Exit or override.
 	aliases             map[string]string
 	defaults            map[string]string
 	short               map[string]bool // Single-char aliases, for clustering
 	requiresArg         map[string]bool
+
+	argCallback func(*OptionSpec, string, *string)
 }
 
 // SetUnknownOptionsFatal is a conveience function designed to be chained
@@ -226,7 +229,7 @@ func NewOptions(spec string) *OptionSpec {
 	// Not folded into previous pattern because that would necessitate FindStringSubmatchIndex.
 	defaultValue := regexp.MustCompile(`\[(.*)\]$`)
 
-	s := &OptionSpec{UnknownOptionsFatal: true, UnknownValuesFatal: false}
+	s := &OptionSpec{UnknownOptionsFatal: true, UnknownValuesFatal: false, Exit: os.Exit}
 	s.aliases = make(map[string]string)
 	s.defaults = make(map[string]string)
 	s.short = make(map[string]bool)
@@ -326,60 +329,59 @@ func (s *OptionSpec) Parse(args []string) (Options, [][]string, []string) {
 		presentedFlagName := flagParts[3]
 		haveSelfValue := flagParts[4] != ""
 		selfValue := flagParts[5]
-		canonical, haveCanonical := s.aliases[presentedFlagName]
+		canonical, known := s.aliases[presentedFlagName]
 		var nextArg *string = nil
 		if i < len(args)-1 {
 			nextArg = &(args[i+1])
 		}
-
-		recordOptionValue := func(value string) {
-			if haveCanonical {
-				opt.opts[canonical] = value
-			}
-			flags = append(flags, []string{presentedFlag, value})
-		}
-		recordOptionNoValue := func() {
-			if haveCanonical {
-				opt.opts[canonical] = fmt.Sprintf("%d", opt.GetInt(canonical)+1)
-			}
-			flags = append(flags, []string{presentedFlag})
+		needsArg := known && s.requiresArg[canonical]
+		if !known && nextArg != nil && !strings.HasPrefix(*nextArg, "-") {
+			needsArg = true
 		}
 
-		if haveCanonical {
-			if s.requiresArg[canonical] {
-				if haveSelfValue {
-					recordOptionValue(selfValue)
-				} else if nextArg != nil {
-					recordOptionValue(*nextArg)
-					i++
-				} else {
-					panic("Option requires argument: " + canonical + "\n" + s.Usage)
-				}
-			} else {
-				// TODO(gaal): decide what to do: we were given an argument to
-				// an option that doesn't take one. Do we treat this as an
-				// optional argument and just record it? Panic?
-				if haveSelfValue {
-					panic("Option does not take argument: " + canonical + "\n" + s.Usage)
-				}
-				recordOptionNoValue()
-			}
-		} else { // Unknown option: try to do the right thing.
-			if s.UnknownOptionsFatal {
-				panic("Unexpected option argument: " + val + "\n" + s.Usage)
-			}
+		arg := func() *string {
 			if haveSelfValue {
-				recordOptionValue(selfValue)
-			} else if nextArg != nil && !strings.HasPrefix(*nextArg, "-") {
-				// Silently assume the next argument is an option value UNLESS
-				// it syntactically looks like another flag. But note we don't
-				// check the flag is known.
-				recordOptionValue(*nextArg)
-				i++
-			} else {
-				recordOptionNoValue()
+				return &selfValue
+			}
+			i++
+			return nextArg
+		}
+
+		callback := s.argCallback
+		if callback == nil {
+			callback = func(optionSpec *OptionSpec, option string, value *string) {
+				if !known {
+					if s.UnknownOptionsFatal {
+						s.PrintUsageAndExit("Unkown option: " + option)
+					}
+				} else {
+					if s.requiresArg[canonical] {
+						if value == nil {
+							s.PrintUsageAndExit("Missing argument: " + option)
+						}
+						opt.opts[canonical] = *value
+					} else {
+						if value != nil {
+							// Unlike the above nil check, reaching here is a programming bug.
+							panic("Unexpected argument: " + option + ": " + *value)
+						}
+						opt.opts[canonical] = fmt.Sprintf("%d", opt.GetInt(canonical)+1)
+					}
+				}
+				if value != nil {
+					flags = append(flags, []string{presentedFlag, *value})
+				} else {
+					flags = append(flags, []string{presentedFlag})
+				}
 			}
 		}
+
+		if needsArg {
+			callback(s, presentedFlag, arg())
+		} else {
+			callback(s, presentedFlag, nil)
+		}
+
 	}
 
 	return opt, flags, extra
@@ -393,10 +395,10 @@ func (s *OptionSpec) Parse(args []string) (Options, [][]string, []string) {
 func (s *OptionSpec) PrintUsageAndExit(err string) {
 	if err == "" {
 		fmt.Println(s.Usage)
-		os.Exit(0)
+		s.Exit(0)
 	}
 	fmt.Fprintf(os.Stderr, "%s\n%s\n", err, s.Usage)
-	os.Exit(1)
+	s.Exit(1)
 }
 
 func smap(f func(string) string, vs []string) []string {

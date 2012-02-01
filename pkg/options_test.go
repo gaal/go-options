@@ -7,19 +7,26 @@ import (
 	"testing"
 )
 
+func exitToPanic(code int) {
+	panic(fmt.Sprintf("exiting with code: %d", code))
+}
+
 func TestNewOptions_trivial(t *testing.T) {
-	s := NewOptions("Hi\n--\na,bbb,ccc= doc [def]")
+	s := NewOptions("TestNewOptions_trivial\n--\na,bbb,ccc= doc [def]")
+	s.Exit = exitToPanic
 	ExpectEquals(t, "ccc", s.aliases["ccc"], "canonical name")
 	ExpectEquals(t, "ccc", s.aliases["a"], "alternate name")
 	ExpectEquals(t, "ccc", s.aliases["bbb"], "alternate name")
 	ExpectEquals(t, true, s.short["a"], "a is a short name")
 	ExpectEquals(t, "def", s.defaults["ccc"], "a is a short name")
 	// This'll change (wrapping etc.) so it's not really worth testing too much.
-	ExpectEquals(t, "Hi\n\n  -a, --bbb, --ccc=  doc [def]\n", s.Usage, "usage string")
+	ExpectEquals(t, "TestNewOptions_trivial\n\n  -a, --bbb, --ccc=  doc [def]\n",
+		s.Usage, "usage string")
 }
 
 func TestParse_trivialDefault(t *testing.T) {
-	s := NewOptions("Hi\n--\na,bbb,ccc= doc [def]")
+	s := NewOptions("TestParse_trivialDefault\n--\na,bbb,ccc= doc [def]")
+	s.Exit = exitToPanic
 	opt, flags, extra := s.Parse([]string{})
 	ExpectEquals(t, "def", opt.Get("ccc"), "default (via canonical)")
 	ExpectEquals(t, [][]string{}, flags, "no flags specified")
@@ -27,7 +34,8 @@ func TestParse_trivialDefault(t *testing.T) {
 }
 
 func TestParse_trivial(t *testing.T) {
-	s := NewOptions("Hi\n--\na,bbb,ccc= doc [def]")
+	s := NewOptions("TestParse_trivial\n--\na,bbb,ccc= doc [def]")
+	s.Exit = exitToPanic
 	test := func(name string) {
 		opt, flags, extra := s.Parse([]string{name, "myval"})
 		ExpectEquals(t, "myval", opt.opts["ccc"], "canonical direct access - "+name)
@@ -41,7 +49,8 @@ func TestParse_trivial(t *testing.T) {
 }
 
 func TestParse_trivialSelfVal(t *testing.T) {
-	s := NewOptions("Hi\n--\na,bbb,ccc= doc [def]")
+	s := NewOptions("TestParse_trivialSelfVal\n--\na,bbb,ccc= doc [def]")
+	s.Exit = exitToPanic
 	test := func(name string) {
 		opt, flags, extra := s.Parse([]string{name + "=myval"})
 		ExpectEquals(t, "myval", opt.opts["ccc"], "canonical direct access - "+name)
@@ -55,12 +64,15 @@ func TestParse_trivialSelfVal(t *testing.T) {
 }
 
 func TestParse_missingArgument(t *testing.T) {
-	s := NewOptions("Hi\n--\na,bbb,ccc= doc [def]")
+	fmt.Println("Next message is benign")
+	s := NewOptions("TestParse_missingArgument\n--\na,bbb,ccc= doc [def]")
+	s.Exit = exitToPanic
 	ExpectDies(t, func() { s.Parse([]string{"--ccc"}) }, "missing required param")
 }
 
 func TestParse_extra(t *testing.T) {
-	s := NewOptions("Hi\n--\nccc= doc [def]")
+	s := NewOptions("TestParse_extra\n--\nccc= doc [def]")
+	s.Exit = exitToPanic
 	opt, flags, extra := s.Parse([]string{"extra1", "--ccc", "myval", "extra2"})
 	ExpectEquals(t, "myval", opt.Get("ccc"), "Get")
 	ExpectEquals(t, [][]string{[]string{"--ccc", "myval"}}, flags, "flags specified")
@@ -73,7 +85,9 @@ func TestParse_extra(t *testing.T) {
 }
 
 func TestParse_unknownFlags(t *testing.T) {
-	s := NewOptions("Hi\n--\nccc= doc [def]")
+	fmt.Println("Next message is benign")
+	s := NewOptions("TestParse_unknownFlags\n--\nccc= doc [def]")
+	s.Exit = exitToPanic
 
 	ExpectDies(t, func() {
 		s.Parse([]string{"--ccc", "myval", "--unk"})
@@ -92,13 +106,15 @@ func TestParse_unknownFlags(t *testing.T) {
 }
 
 func TestParse_override(t *testing.T) {
-	s := NewOptions("Hi\n--\na,bbb,ccc= doc [def]")
+	s := NewOptions("TestParse_override\n--\na,bbb,ccc= doc [def]")
+	s.Exit = exitToPanic
 	opt, _, _ := s.Parse([]string{"--bbb", "111", "--ccc", "222", "-a", "333"})
 	ExpectEquals(t, "333", opt.Get("ccc"), "last flag wins")
 }
 
 func TestParse_counting(t *testing.T) {
-	s := NewOptions("Hi\n--\na,bbb,ccc doc")
+	s := NewOptions("TestParse_counting\n--\na,bbb,ccc doc")
+	s.Exit = exitToPanic
 	opt, _, _ := s.Parse([]string{"-a"})
 	ExpectEquals(t, 1, opt.GetInt("ccc"), "implicit value")
 
