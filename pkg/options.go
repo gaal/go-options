@@ -105,8 +105,10 @@ and friends, use OptionSpec.SetCallback:
     }
   }
 
-  spec.SetCallback(myParseCallback)
+  spec.ParseCallback = myParseCallback
   _, _, extra := spec.Parse(os.Args[1:])
+  // Note that the first two return values of Parse are not useful when using
+  // a custom parse callback.
 
 BUG(gaal): Clustering of short options ("cat -vvv") is not yet supported.
 BUG(gaal): Negated options ("--no-frobulate") are not yet supported.
@@ -204,7 +206,7 @@ type OptionSpec struct {
 	short               map[string]bool // Single-char aliases, for clustering
 	requiresArg         map[string]bool
 
-	argCallback func(*OptionSpec, string, *string)
+	ParseCallback func(*OptionSpec, string, *string)
 }
 
 // SetUnknownOptionsFatal is a conveience function designed to be chained
@@ -347,8 +349,14 @@ func (s *OptionSpec) Parse(args []string) (Options, [][]string, []string) {
 			return nextArg
 		}
 
-		callback := s.argCallback
+		callback := s.ParseCallback
 		if callback == nil {
+			// The standard parse parse callback is in cahoots with the parser;
+			// it closes on more state than user callbacks have access to. We
+			// need to consider exposing more of it, e.g. both the presented
+			// flag	(which is passed as a parameter now) and the canonical one
+			// are interesting. But we don't want to complicate things too much,
+			// so we'll probably not allow winding back an argument.
 			callback = func(optionSpec *OptionSpec, option string, value *string) {
 				if !known {
 					if s.UnknownOptionsFatal {
@@ -377,9 +385,9 @@ func (s *OptionSpec) Parse(args []string) (Options, [][]string, []string) {
 		}
 
 		if needsArg {
-			callback(s, presentedFlag, arg())
+			callback(s, presentedFlagName, arg())
 		} else {
-			callback(s, presentedFlag, nil)
+			callback(s, presentedFlagName, nil)
 		}
 
 	}

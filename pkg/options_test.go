@@ -143,6 +143,35 @@ func TestGetAll(t *testing.T) {
 		"GetAll")
 }
 
+func TestCallbackInterface(t *testing.T) {
+	s := NewOptions("TestCallbackInterface\n--\na,bbb,ccc= doc\nddd more doc\n")
+	var (ccc string; ddd bool; unknown [][]string)
+	s.ParseCallback = func(spec *OptionSpec, option string, argument *string) {
+		if argument != nil {
+			switch option {
+				case "a", "bbb", "ccc":  ccc = *argument
+				default: unknown = append(unknown, []string{option, *argument})
+			}
+		} else {
+			switch option {
+				case "ddd": ddd = true
+				default: unknown = append(unknown, []string{option})
+			}
+		}
+	}
+	_, _, extra := s.Parse(
+		[]string{"--unk1", "--ccc", "myval", "--bbb=noooo", "hi", "-a", "myotherval",
+		"--unk2", "val2", "--ddd", "--unk3"})
+	ExpectEquals(t, "myotherval", ccc, "known option")
+	ExpectEquals(t, true, ddd, "known option")
+	ExpectEquals(
+		t,
+		[][]string{[]string{"unk1"}, []string{"unk2", "val2"}, []string{"unk3"}},
+		unknown,
+		"unknown options, with and without arguments")
+	ExpectEquals(t, []string{"hi"}, extra, "extra")
+}
+
 // These are little testing utilities that I like. May move to a separate module one day.
 
 func ExpectEquals(t *testing.T, expected, actual interface{}, desc ...string) {

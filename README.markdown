@@ -3,6 +3,7 @@ go-options - command line parsing library for Go.
 * Easy to use - no boilerplate
 * Self-documenting - the spec turns into the usage string
 * Powerful - doesn't do everything you ever dreamed of, but comes close
+* Flexible - if you want control over parsing, provide your own callback.
 
 This design is inspired by `git revparse --parseopt` and the discussion of
 `bup.options` here: <http://apenwarr.ca/log/?m=201111#02>. There are some

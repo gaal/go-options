@@ -9,10 +9,11 @@ import (
 	"github.com/gaal/go-options"
 )
 
+// Note how with callbacks, the programmer is responsible for default values.
 var (
-	n, e, v bool
-	in, out string
-	r       int
+	n, e    bool
+	in, out string = "utf-8", "utf-8"
+	r, v    int    = 1, 0
 )
 
 const mySpec = `
@@ -29,53 +30,52 @@ r,repeat=             repeat every line some number of times [1]
 v,verbose             be verbose
 `
 
-func argCb(spec OptionSpec, option string, argument string) {
-	switch option {
-	case "input-encoding":
-		in = argument
-	case "output-encoding":
-		out = argument
-	case "repeat":
-		fmt.Scanf(argument, "%d", &r)
-	default:
-		spec.PrintUsageAndExit("Unknown option: " + option)
-	}
-}
-
-func noArgCb(spec OptionSpec, option string) {
-	switch option {
-	case "number":
-		n = true
-	case "escape":
-		e = true
-	case "verbose":
-		v = true
-	case "help":
-		spec.PrintUsageAndExit("") // No error
-	default:
-		spec.PrintUsageAndExit("Unknown option: " + option)
+func myParseCallback(spec *options.OptionSpec, option string, argument *string) {
+	if argument != nil {
+		switch option {
+		case "i", "input-encoding":
+			in = *argument
+		case "o", "output-encoding":
+			out = *argument
+		case "r", "repeat":
+			fmt.Scanf(*argument, "%d", &r)
+		default:
+			spec.PrintUsageAndExit("Unknown option: " + option)
+		}
+	} else {
+		switch option {
+		case "n", "number":
+			n = true
+		case "e", "escape":
+			e = true
+		case "v", "verbose":
+			v++
+		case "h", "help":
+			spec.PrintUsageAndExit("") // No error
+		default:
+			spec.PrintUsageAndExit("Unknown option: " + option)
+		}
 	}
 }
 
 func main() {
-	spec := options.NewOptions(mySpec).SetCallbacks(argCb, noArgCb)
-	opt, flags, extra := spec.Parse(os.Args[1:])
+	spec := options.NewOptions(mySpec)
+	spec.ParseCallback = myParseCallback
+	_, _, extra := spec.Parse(os.Args[1:])
 
 	fmt.Printf("I will concatenate the files: %q\n", extra)
-	if opt.GetBool("number") {
+	if n {
 		fmt.Println("I will number each line")
 	}
-	if opt.GetBool("escape") {
+	if e {
 		fmt.Println("I will escape each line")
 	}
-	if r := opt.GetInt("repeat"); r != 1 {
+	if r != 1 {
 		fmt.Printf("I will repeat each line %d times\n", r)
 	}
-	if v := opt.GetInt("verbose"); v > 0 {
+	if v > 0 {
 		fmt.Printf("I will be verbose (level %d)\n", v)
 	}
-	fmt.Printf("Input charset: %s\n", opt.Get("input-encoding"))
-	fmt.Printf("Output charset: %s\n", opt.Get("output-encoding"))
-
-	fmt.Printf("For reference, here are the flags you gave me: %v\n", flags)
+	fmt.Printf("Input charset: %s\n", in)
+	fmt.Printf("Output charset: %s\n", out)
 }

@@ -1,7 +1,7 @@
 include $(GOROOT)/src/Make.inc
 
-TARG=ex1
+TARG=cat2
 GOFILES=\
-	cat1.go\
+	cat2.go\
 
 include $(GOROOT)/src/Make.cmd
