@@ -1,13 +1,15 @@
 include $(GOROOT)/src/Make.inc
 
+all:
+	cd pkg && gomake
+
 install:
 	cd pkg && gomake install
 
 test:
 	cd pkg && gomake test
 
-example:
-	cd pkg && gomake
+example: install
 	cd example && gomake example
 
 clean:
