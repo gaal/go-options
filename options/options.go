@@ -83,8 +83,8 @@ argument.
 Callback interface:
 
 If you prefer a more type-safe, static interface to your options, you can
-use options to get that too. Instead of (or in addition to) looking at opt
-and friends, set OptionSpec.ParseCallback:
+use options to get that too. Instead of looking at opt and friends, set
+OptionSpec.ParseCallback:
 
   var (foo string; bar int; baz float64; lst []string; verbose bool)
 
