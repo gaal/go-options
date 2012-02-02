@@ -83,10 +83,10 @@ argument.
 Callback interface:
 
 If you prefer a more type-safe, static interface to your options, you can
-still use options to get it. Instead of (or in addition to) looking at opt
-and friends, use OptionSpec.SetCallback:
+use options to get that too. Instead of (or in addition to) looking at opt
+and friends, set OptionSpec.ParseCallback:
 
-  var (foo string; bar int; baz float64; lst []string, verbose bool)
+  var (foo string; bar int; baz float64; lst []string; verbose bool)
 
   func myParseCallback(spec *OptionSpec, option string, argument *string) {
     if argument != nil {
@@ -110,9 +110,6 @@ and friends, use OptionSpec.SetCallback:
   // Note that the first two return values of Parse are not useful when using
   // a custom parse callback.
 
-BUG(gaal): Clustering of short options ("cat -vvv") is not yet supported.
-BUG(gaal): Negated options ("--no-frobulate") are not yet supported.
-BUG(gaal): Option groups are not yet supported.
 */
 package options
 
@@ -122,6 +119,8 @@ import (
 	"regexp"
 	"strings"
 )
+
+const EX_USAGE = 64  // Exit status for incorrect command lines.
 
 // Options represents the known formal options provided on the command line.
 type Options struct {
@@ -195,18 +194,23 @@ func GetAll(flag string, flags [][]string) []string {
 	return out
 }
 
+// BUG(gaal): Option groups are not yet supported.
+
+// BUG(gaal): The usage string is not yet formatted prettily. It should consider tty width, etc.
+
 // OptionSpec represents the specification of a command line interface.
 type OptionSpec struct {
-	Usage               string         // Formatted usage string
-	UnknownOptionsFatal bool           // Whether to die on unknown flags [true]
-	UnknownValuesFatal  bool           // Whether to die un extra nonflags [false]
-	Exit                func(code int) // os.Exit or override.
+	Usage               string // Formatted usage string
+	UnknownOptionsFatal bool   // Whether to die on unknown flags [true]
+	UnknownValuesFatal  bool   // Whether to die un extra nonflags [false]
+
+	ParseCallback func(*OptionSpec, string, *string) // Custom callback function
+	Exit          func(code int)                     // Function to use for exiting [os.Exit]
+
 	aliases             map[string]string
 	defaults            map[string]string
 	short               map[string]bool // Single-char aliases, for clustering
 	requiresArg         map[string]bool
-
-	ParseCallback func(*OptionSpec, string, *string)
 }
 
 // SetUnknownOptionsFatal is a conveience function designed to be chained
@@ -220,6 +224,13 @@ func (s *OptionSpec) SetUnknownOptionsFatal(val bool) *OptionSpec {
 // after NewOptions.
 func (s *OptionSpec) SetUnknownValuesFatal(val bool) *OptionSpec {
 	s.UnknownValuesFatal = val
+	return s
+}
+
+// SetParseCallback is a convencience function designed to be chained after
+// NewOptions.
+func (s *OptionSpec) SetParseCallback(callback func(*OptionSpec, string, *string)) *OptionSpec {
+	s.ParseCallback = callback
 	return s
 }
 
@@ -297,6 +308,10 @@ func NewOptions(spec string) *OptionSpec {
 func (s *OptionSpec) GetCanonical(option string) string {
 	return s.aliases[option]
 }
+
+// BUG(gaal): Clustering of short options ("cat -vvv") is not yet supported.
+
+// BUG(gaal): Negated options ("--no-frobulate") are not yet supported.
 
 // Parse performs the actual parsing of a command line according to an
 // OptionSpec.
@@ -413,7 +428,7 @@ func (s *OptionSpec) PrintUsageAndExit(err string) {
 		s.Exit(0)
 	}
 	fmt.Fprintf(os.Stderr, "%s\n%s\n", err, s.Usage)
-	s.Exit(1)
+	s.Exit(EX_USAGE)
 }
 
 func smap(f func(string) string, vs []string) []string {

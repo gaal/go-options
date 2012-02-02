@@ -61,8 +61,7 @@ func myParseCallback(spec *options.OptionSpec, option string, argument *string) 
 }
 
 func main() {
-	spec := options.NewOptions(mySpec)
-	spec.ParseCallback = myParseCallback
+	spec := options.NewOptions(mySpec).SetParseCallback(myParseCallback)
 	_, _, extra := spec.Parse(os.Args[1:])
 
 	fmt.Printf("I will concatenate the files: %q\n", extra)
