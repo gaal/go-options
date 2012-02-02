@@ -32,9 +32,11 @@ a line containing only two dashes, then a series of option specifications:
 
 Then parse the command line:
 
-  opt, flags, extra := s.Parse(os.Args[1:])
+  opt := s.Parse(os.Args[1:])
 
-(For another way to do this, see the secion "Callback interface" below.)
+This return value is of Options type and has the parsed command line (for
+an alternate way of parsing the command line, see the "Callback interface"
+descibed below).
 
 Options may have any number of aliases; the last one is the "canonical"
 name and the one your program must use when reading values.
@@ -61,14 +63,14 @@ The user can say either "--foo=bar" or "--foo bar".
 
 Parsing stops if "--" is given on the command line.
 
-The "extra" return value of Parse contains all non-option command line
+The "Extra" field of the returned Options contains all non-option command line
 input. In the case of a cat command, this would be the filenames to concat.
 
 By default, options permits such extra values. Setting UnknownValuesFatal
 causes it to panic when it enconters them instead.
 
-The "flags" return value of Parse contains the series of flags as given on
-the command line, including repeated ones (which are suppressed in opt --
+The "Flags" field of the returned Options contains the series of flags as given
+on the command line, including repeated ones (which are suppressed in opt --
 it only contains the last value). This allows you to do your own handling
 of repeated options easily.
 
@@ -126,6 +128,8 @@ const EX_USAGE = 64  // Exit status for incorrect command lines.
 type Options struct {
 	opts  map[string]string
 	known map[string]bool
+	Flags [][]string  // Original flags presented on the command line
+	Extra []string  // Non-option command line arguments left on the command line
 }
 
 // Get returns the value of an option, which must be known to this parse.
@@ -315,15 +319,15 @@ func (s *OptionSpec) GetCanonical(option string) string {
 
 // Parse performs the actual parsing of a command line according to an
 // OptionSpec.
-// It returns three values: opt, flags, extra; see the package description
-// for an overview of what they mean and how they are used.
+// It returns an Options value; see the package description for an overview
+// of what it means and how to use it.
 // In case of parse error, a panic is thrown.
 // TODO(gaal): decide if gentler error signalling is more useful.
-func (s *OptionSpec) Parse(args []string) (Options, [][]string, []string) {
+func (s *OptionSpec) Parse(args []string) Options {
 	// TODO(gaal): extract to constant.
 	flagRe := regexp.MustCompile(`^((--?)([-\w]+))(=(.*))?$`)
 
-	opt := Options{}
+	opt := Options{opts: make(map[string]string), Flags: make([][]string, 0), Extra: make([]string, 0)}
 	opt.opts = make(map[string]string)
 	for flag, def := range s.defaults {
 		opt.opts[flag] = def
@@ -332,8 +336,6 @@ func (s *OptionSpec) Parse(args []string) (Options, [][]string, []string) {
 	for _, canonical := range s.aliases {
 		opt.known[canonical] = true
 	}
-	flags := make([][]string, 0)
-	extra := make([]string, 0)
 
 	for i := 0; i < len(args); i++ { // Can't use range because we may bump i.
 		val := args[i]
@@ -346,7 +348,7 @@ func (s *OptionSpec) Parse(args []string) (Options, [][]string, []string) {
 			if s.UnknownValuesFatal {
 				panic("Unexpected argument: " + val + "\n" + s.Usage)
 			}
-			extra = append(extra, val)
+			opt.Extra = append(opt.Extra, val)
 			continue
 		}
 		presentedFlag := flagParts[1] // "presented" by the user.
@@ -354,22 +356,6 @@ func (s *OptionSpec) Parse(args []string) (Options, [][]string, []string) {
 		haveSelfValue := flagParts[4] != ""
 		selfValue := flagParts[5]
 		canonical, known := s.aliases[presentedFlagName]
-		var nextArg *string = nil
-		if i < len(args)-1 {
-			nextArg = &(args[i+1])
-		}
-		needsArg := known && s.requiresArg[canonical]
-		if !known && nextArg != nil && !strings.HasPrefix(*nextArg, "-") {
-			needsArg = true
-		}
-
-		arg := func() *string {
-			if haveSelfValue {
-				return &selfValue
-			}
-			i++
-			return nextArg
-		}
 
 		callback := s.ParseCallback
 		if callback == nil {
@@ -399,13 +385,28 @@ func (s *OptionSpec) Parse(args []string) (Options, [][]string, []string) {
 					}
 				}
 				if value != nil {
-					flags = append(flags, []string{presentedFlag, *value})
+					opt.Flags = append(opt.Flags, []string{presentedFlag, *value})
 				} else {
-					flags = append(flags, []string{presentedFlag})
+					opt.Flags = append(opt.Flags, []string{presentedFlag})
 				}
 			}
 		}
 
+		var nextArg *string = nil
+		if i < len(args)-1 {
+			nextArg = &(args[i+1])
+		}
+		needsArg := known && s.requiresArg[canonical]
+		if !known && nextArg != nil && !strings.HasPrefix(*nextArg, "-") {
+			needsArg = true
+		}
+		arg := func() *string {
+			if haveSelfValue {
+				return &selfValue
+			}
+			i++
+			return nextArg
+		}
 		if needsArg {
 			callback(s, presentedFlagName, arg())
 		} else {
@@ -414,7 +415,7 @@ func (s *OptionSpec) Parse(args []string) (Options, [][]string, []string) {
 
 	}
 
-	return opt, flags, extra
+	return opt
 }
 
 // PrintUsageAndExit writes the usage string and exits the program.

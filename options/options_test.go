@@ -7,10 +7,6 @@ import (
 	"testing"
 )
 
-func exitToPanic(code int) {
-	panic(fmt.Sprintf("exiting with code: %d", code))
-}
-
 func TestNewOptions_trivial(t *testing.T) {
 	s := NewOptions("TestNewOptions_trivial\n--\na,bbb,ccc= doc [def]")
 	s.Exit = exitToPanic
@@ -27,21 +23,21 @@ func TestNewOptions_trivial(t *testing.T) {
 func TestParse_trivialDefault(t *testing.T) {
 	s := NewOptions("TestParse_trivialDefault\n--\na,bbb,ccc= doc [def]")
 	s.Exit = exitToPanic
-	opt, flags, extra := s.Parse([]string{})
+	opt := s.Parse([]string{})
 	ExpectEquals(t, "def", opt.Get("ccc"), "default (via canonical)")
-	ExpectEquals(t, [][]string{}, flags, "no flags specified")
-	ExpectEquals(t, []string{}, extra, "no extra args given")
+	ExpectEquals(t, [][]string{}, opt.Flags, "no flags specified")
+	ExpectEquals(t, []string{}, opt.Extra, "no extra args given")
 }
 
 func TestParse_trivial(t *testing.T) {
 	s := NewOptions("TestParse_trivial\n--\na,bbb,ccc= doc [def]")
 	s.Exit = exitToPanic
 	test := func(name string) {
-		opt, flags, extra := s.Parse([]string{name, "myval"})
+		opt := s.Parse([]string{name, "myval"})
 		ExpectEquals(t, "myval", opt.opts["ccc"], "canonical direct access - "+name)
 		ExpectEquals(t, "myval", opt.Get("ccc"), "Get - "+name)
-		ExpectEquals(t, [][]string{[]string{name, "myval"}}, flags, "flags specified - "+name)
-		ExpectEquals(t, []string{}, extra, "no extra args given")
+		ExpectEquals(t, [][]string{[]string{name, "myval"}}, opt.Flags, "flags specified - "+name)
+		ExpectEquals(t, []string{}, opt.Extra, "no extra args given")
 	}
 	test("--ccc")
 	test("--bbb")
@@ -52,11 +48,11 @@ func TestParse_trivialSelfVal(t *testing.T) {
 	s := NewOptions("TestParse_trivialSelfVal\n--\na,bbb,ccc= doc [def]")
 	s.Exit = exitToPanic
 	test := func(name string) {
-		opt, flags, extra := s.Parse([]string{name + "=myval"})
+		opt := s.Parse([]string{name + "=myval"})
 		ExpectEquals(t, "myval", opt.opts["ccc"], "canonical direct access - "+name)
 		ExpectEquals(t, "myval", opt.Get("ccc"), "Get - "+name)
-		ExpectEquals(t, [][]string{[]string{name, "myval"}}, flags, "flags specified - "+name)
-		ExpectEquals(t, []string{}, extra, "no extra args given")
+		ExpectEquals(t, [][]string{[]string{name, "myval"}}, opt.Flags, "flags specified - "+name)
+		ExpectEquals(t, []string{}, opt.Extra, "no extra args given")
 	}
 	test("--ccc")
 	test("--bbb")
@@ -73,10 +69,10 @@ func TestParse_missingArgument(t *testing.T) {
 func TestParse_extra(t *testing.T) {
 	s := NewOptions("TestParse_extra\n--\nccc= doc [def]")
 	s.Exit = exitToPanic
-	opt, flags, extra := s.Parse([]string{"extra1", "--ccc", "myval", "extra2"})
+	opt := s.Parse([]string{"extra1", "--ccc", "myval", "extra2"})
 	ExpectEquals(t, "myval", opt.Get("ccc"), "Get")
-	ExpectEquals(t, [][]string{[]string{"--ccc", "myval"}}, flags, "flags specified")
-	ExpectEquals(t, []string{"extra1", "extra2"}, extra, "extra args given")
+	ExpectEquals(t, [][]string{[]string{"--ccc", "myval"}}, opt.Flags, "flags specified")
+	ExpectEquals(t, []string{"extra1", "extra2"}, opt.Extra, "extra args given")
 
 	s.SetUnknownValuesFatal(true)
 	ExpectDies(t, func() {
@@ -94,31 +90,31 @@ func TestParse_unknownFlags(t *testing.T) {
 	}, "dies on unknown options unless asked not to")
 
 	s.SetUnknownOptionsFatal(false)
-	opt, flags, extra := s.Parse([]string{"--unk1", "--ccc", "myval", "--unk2", "val2", "--unk3"})
+	opt := s.Parse([]string{"--unk1", "--ccc", "myval", "--unk2", "val2", "--unk3"})
 	ExpectEquals(t, "myval", opt.Get("ccc"), "Get")
 	ExpectEquals(t, [][]string{
 		[]string{"--unk1"},
 		[]string{"--ccc", "myval"},
 		[]string{"--unk2", "val2"},
 		[]string{"--unk3"}},
-		flags, "flags specified")
-	ExpectEquals(t, []string{}, extra, "no extra args given")
+		opt.Flags, "flags specified")
+	ExpectEquals(t, []string{}, opt.Extra, "no extra args given")
 }
 
 func TestParse_override(t *testing.T) {
 	s := NewOptions("TestParse_override\n--\na,bbb,ccc= doc [def]")
 	s.Exit = exitToPanic
-	opt, _, _ := s.Parse([]string{"--bbb", "111", "--ccc", "222", "-a", "333"})
+	opt := s.Parse([]string{"--bbb", "111", "--ccc", "222", "-a", "333"})
 	ExpectEquals(t, "333", opt.Get("ccc"), "last flag wins")
 }
 
 func TestParse_counting(t *testing.T) {
 	s := NewOptions("TestParse_counting\n--\na,bbb,ccc doc")
 	s.Exit = exitToPanic
-	opt, _, _ := s.Parse([]string{"-a"})
+	opt := s.Parse([]string{"-a"})
 	ExpectEquals(t, 1, opt.GetInt("ccc"), "implicit value")
 
-	opt, _, _ = s.Parse([]string{"-a", "-a", "--ccc"})
+	opt = s.Parse([]string{"-a", "-a", "--ccc"})
 	ExpectEquals(t, 3, opt.GetInt("ccc"), "implicit value - repetitions")
 }
 
@@ -159,7 +155,7 @@ func TestCallbackInterface(t *testing.T) {
 			}
 		}
 	}
-	_, _, extra := s.Parse(
+	opt := s.Parse(
 		[]string{"--unk1", "--ccc", "myval", "--bbb=noooo", "hi", "-a", "myotherval",
 		"--unk2", "val2", "--ddd", "--unk3"})
 	ExpectEquals(t, "myotherval", ccc, "known option")
@@ -169,7 +165,11 @@ func TestCallbackInterface(t *testing.T) {
 		[][]string{[]string{"unk1"}, []string{"unk2", "val2"}, []string{"unk3"}},
 		unknown,
 		"unknown options, with and without arguments")
-	ExpectEquals(t, []string{"hi"}, extra, "extra")
+	ExpectEquals(t, []string{"hi"}, opt.Extra, "extra")
+}
+
+func exitToPanic(code int) {
+	panic(fmt.Sprintf("exiting with code: %d", code))
 }
 
 // These are little testing utilities that I like. May move to a separate module one day.
