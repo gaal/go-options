@@ -38,7 +38,7 @@ func myParseCallback(spec *options.OptionSpec, option string, argument *string) 
 		case "output-encoding":
 			out = *argument
 		case "repeat":
-			fmt.Scanf(*argument, "%d", &r)
+			fmt.Sscanf(*argument, "%d", &r)
 		default:
 			spec.PrintUsageAndExit("Unknown option: " + option)
 		}
