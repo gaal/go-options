@@ -1,5 +1,5 @@
-go-options - command line parsing library for Go.
-=================================================
+go-options - command line parsing library for Go
+================================================
 
 * Easy to use - no boilerplate
 * Self-documenting - the spec turns into the usage string
