@@ -130,6 +130,7 @@ type Options struct {
 	known map[string]bool
 	Flags [][]string  // Original flags presented on the command line
 	Extra []string  // Non-option command line arguments left on the command line
+	Leftover []string // Untouched arguments (after "--")
 }
 
 // Get returns the value of an option, which must be known to this parse.
@@ -327,7 +328,12 @@ func (s *OptionSpec) Parse(args []string) Options {
 	// TODO(gaal): extract to constant.
 	flagRe := regexp.MustCompile(`^((--?)([-\w]+))(=(.*))?$`)
 
-	opt := Options{opts: make(map[string]string), Flags: make([][]string, 0), Extra: make([]string, 0)}
+	opt := Options{
+		opts: make(map[string]string),
+		Flags: make([][]string, 0),
+		Extra: make([]string, 0),
+		Leftover: make([]string, 0),
+	}
 	opt.opts = make(map[string]string)
 	for flag, def := range s.defaults {
 		opt.opts[flag] = def
@@ -340,6 +346,7 @@ func (s *OptionSpec) Parse(args []string) Options {
 	for i := 0; i < len(args); i++ { // Can't use range because we may bump i.
 		val := args[i]
 		if val == "--" {
+			opt.Leftover = append(opt.Leftover, args[i+1:]...)
 			break
 		}
 

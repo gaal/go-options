@@ -80,6 +80,20 @@ func TestParse_extra(t *testing.T) {
 	}, "dies on extras when asked to")
 }
 
+func TestParse_leftover(t *testing.T) {
+	s := NewOptions("TestParse_extra\n--\nccc= doc [def]")
+	s.Exit = exitToPanic
+	s.SetUnknownValuesFatal(true)
+	opt := s.Parse([]string{"--ccc", "myval"})
+	ExpectEquals(t, []string{}, opt.Leftover, "no leftover args given")
+
+	opt = s.Parse([]string{"--ccc", "myval", "--"})
+	ExpectEquals(t, []string{}, opt.Leftover, "no leftover args given (with --)")
+
+	opt = s.Parse([]string{"--ccc", "myval", "--", "leftover1", "leftover2"})
+	ExpectEquals(t, []string{"leftover1", "leftover2"}, opt.Leftover, "leftover args given")
+}
+
 func TestParse_unknownFlags(t *testing.T) {
 	fmt.Println("Next message is benign")
 	s := NewOptions("TestParse_unknownFlags\n--\nccc= doc [def]")
