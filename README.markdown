@@ -11,7 +11,8 @@ This design is inspired by `git rev-parse --parseopt` and the discussion of
 minor deviations.
 
 * On the code side, you must access the opt structure with canonical option
-names only. This is intended to reduce programmer errors.
+names only. This is intended to reduce programmer errors. (This applies to
+the simple, non-callback interface.)
 * When I support negated options, I will not support unnegated aliases
 for them as that can lead to more confusion than I deem worth harboring.
 
