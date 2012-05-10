@@ -108,9 +108,8 @@ OptionSpec.ParseCallback:
   }
 
   spec.ParseCallback = myParseCallback
-  _, _, extra := spec.Parse(os.Args[1:])
-  // Note that the first two return values of Parse are not useful when using
-  // a custom parse callback.
+  opt := spec.Parse(os.Args[1:])
+  // Note that the opt.Get won't work when using a custom parse callback.
 
 */
 package options
