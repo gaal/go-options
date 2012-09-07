@@ -15,7 +15,7 @@ Create an OptionSpec that documents your program's allowed flags. This
 begins with a free-text synopsis of your command line interface, then
 a line containing only two dashes, then a series of option specifications:
 
-  import "options"
+  import "github.com/gaal/go-options/options"
   s := options.NewOptions(`
   cat - concatenate files to standard input
   Usage: cat [OPTIONS] file...
