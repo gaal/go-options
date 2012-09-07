@@ -1,7 +1,7 @@
 go-options - command line parsing library for Go
 ================================================
 
-To install: go get github.com/gaal/go-options
+To install: go get github.com/gaal/go-options/options
 
 * Easy to use - no boilerplate
 * Self-documenting - the spec turns into the usage string
