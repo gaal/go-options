@@ -69,10 +69,10 @@ func TestParse_missingArgument(t *testing.T) {
 func TestParse_extra(t *testing.T) {
 	s := NewOptions("TestParse_extra\n--\nccc= doc [def]")
 	s.Exit = exitToPanic
-	opt := s.Parse([]string{"extra1", "--ccc", "myval", "extra2"})
+	opt := s.Parse([]string{"extra1", "--ccc", "myval", "extra2", "extra3=foo"})
 	ExpectEquals(t, "myval", opt.Get("ccc"), "Get")
 	ExpectEquals(t, [][]string{[]string{"--ccc", "myval"}}, opt.Flags, "flags specified")
-	ExpectEquals(t, []string{"extra1", "extra2"}, opt.Extra, "extra args given")
+	ExpectEquals(t, []string{"extra1", "extra2", "extra3=foo"}, opt.Extra, "extra args given")
 
 	s.SetUnknownValuesFatal(true)
 	ExpectDies(t, func() {
@@ -81,7 +81,7 @@ func TestParse_extra(t *testing.T) {
 }
 
 func TestParse_leftover(t *testing.T) {
-	s := NewOptions("TestParse_extra\n--\nccc= doc [def]")
+	s := NewOptions("TestParse_leftover\n--\nccc= doc [def]")
 	s.Exit = exitToPanic
 	s.SetUnknownValuesFatal(true)
 	opt := s.Parse([]string{"--ccc", "myval"})
@@ -170,7 +170,7 @@ func TestCallbackInterface(t *testing.T) {
 		}
 	}
 	opt := s.Parse(
-		[]string{"--unk1", "--ccc", "myval", "--bbb=noooo", "hi", "-a", "myotherval",
+		[]string{"--unk1", "--ccc", "myval", "--bbb=noooo", "hi", "a=b", "-a", "myotherval",
 		"--unk2", "val2", "--ddd", "--unk3"})
 	ExpectEquals(t, "myotherval", ccc, "known option")
 	ExpectEquals(t, true, ddd, "known option")
@@ -179,7 +179,7 @@ func TestCallbackInterface(t *testing.T) {
 		[][]string{[]string{"unk1"}, []string{"unk2", "val2"}, []string{"unk3"}},
 		unknown,
 		"unknown options, with and without arguments")
-	ExpectEquals(t, []string{"hi"}, opt.Extra, "extra")
+	ExpectEquals(t, []string{"hi", "a=b"}, opt.Extra, "extra")
 }
 
 func exitToPanic(code int) {
