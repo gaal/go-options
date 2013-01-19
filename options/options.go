@@ -55,11 +55,13 @@ are encouraged to write your own if you need more.
 Options either take a required argument or take no argument. Non-argument
 options have useful values exposed as bool and ints.
 
-  // cat -v -v -v
+  // cat -v -v -v, or alternatively,
+  // cat -vvv
   opt.GetBool("verbose")     // true
   opt.GetInt("verbose")      // 3
 
-The user can say either "--foo=bar" or "--foo bar".
+The user can say either "--foo=bar" or "--foo bar". Short options may be
+clustered; "-abc foo" means the same as "-a -b -c=foo".
 
 Parsing stops if "--" is given on the command line.
 
@@ -116,20 +118,21 @@ package options
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strings"
 )
 
-const EX_USAGE = 64  // Exit status for incorrect command lines.
+const EX_USAGE = 64 // Exit status for incorrect command lines.
 
 // Options represents the known formal options provided on the command line.
 type Options struct {
-	opts  map[string]string
-	known map[string]bool
-	Flags [][]string  // Original flags presented on the command line
-	Extra []string  // Non-option command line arguments left on the command line
-	Leftover []string // Untouched arguments (after "--")
+	opts     map[string]string
+	known    map[string]bool
+	Flags    [][]string // Original flags presented on the command line
+	Extra    []string   // Non-option command line arguments left on the command line
+	Leftover []string   // Untouched arguments (after "--")
 }
 
 // Get returns the value of an option, which must be known to this parse.
@@ -138,10 +141,8 @@ type Options struct {
 // may be more suited for looking them up.
 func (o *Options) Get(flag string) string {
 	val, ok := o.opts[flag]
-	if !ok {
-		if !o.known[flag] {
-			panic(fmt.Sprintf("[Programmer error] Unknown option: %s\ndump: %+v", flag, *o))
-		}
+	if !ok && !o.known[flag] {
+		panic(fmt.Sprintf("[Programmer error] Unknown option: %s\ndump: %+v", flag, *o))
 	}
 	return val
 }
@@ -206,15 +207,15 @@ func GetAll(flag string, flags [][]string) []string {
 type OptionSpec struct {
 	Usage               string // Formatted usage string
 	UnknownOptionsFatal bool   // Whether to die on unknown flags [true]
-	UnknownValuesFatal  bool   // Whether to die un extra nonflags [false]
+	UnknownValuesFatal  bool   // Whether to die on extra nonflags [false]
 
 	ParseCallback func(*OptionSpec, string, *string) // Custom callback function
 	Exit          func(code int)                     // Function to use for exiting [os.Exit]
+	ErrorWriter   io.Writer                          // Alternate Writer for usage writing
 
-	aliases             map[string]string
-	defaults            map[string]string
-	short               map[string]bool // Single-char aliases, for clustering
-	requiresArg         map[string]bool
+	aliases     map[string]string
+	defaults    map[string]string
+	requiresArg map[string]bool
 }
 
 // SetUnknownOptionsFatal is a conveience function designed to be chained
@@ -249,7 +250,6 @@ func NewOptions(spec string) *OptionSpec {
 	s := &OptionSpec{UnknownOptionsFatal: true, UnknownValuesFatal: false, Exit: os.Exit}
 	s.aliases = make(map[string]string)
 	s.defaults = make(map[string]string)
-	s.short = make(map[string]bool)
 	s.requiresArg = make(map[string]bool)
 	stanza := 0 // synopsis
 	specLines := strings.Split(spec, "\n")
@@ -284,9 +284,6 @@ func NewOptions(spec string) *OptionSpec {
 						panic(fmt.Sprint(n, ": bad name: ", name))
 					}
 
-					if len(name) == 1 {
-						s.short[name] = true
-					}
 					s.aliases[name] = canonical
 				}
 				if parts[2] == "=" {
@@ -313,8 +310,6 @@ func (s *OptionSpec) GetCanonical(option string) string {
 	return s.aliases[option]
 }
 
-// BUG(gaal): Clustering of short options ("cat -vvv") is not yet supported.
-
 // BUG(gaal): Negated options ("--no-frobulate") are not yet supported.
 
 // Parse performs the actual parsing of a command line according to an
@@ -328,9 +323,9 @@ func (s *OptionSpec) Parse(args []string) Options {
 	flagRe := regexp.MustCompile(`^((--?)([-\w]+))(=(.*))?$`)
 
 	opt := Options{
-		opts: make(map[string]string),
-		Flags: make([][]string, 0),
-		Extra: make([]string, 0),
+		opts:     make(map[string]string),
+		Flags:    make([][]string, 0),
+		Extra:    make([]string, 0),
 		Leftover: make([]string, 0),
 	}
 	opt.opts = make(map[string]string)
@@ -358,6 +353,7 @@ func (s *OptionSpec) Parse(args []string) Options {
 			continue
 		}
 		presentedFlag := flagParts[1] // "presented" by the user.
+		presentedDash := flagParts[2]
 		presentedFlagName := flagParts[3]
 		haveSelfValue := flagParts[4] != ""
 		selfValue := flagParts[5]
@@ -372,11 +368,32 @@ func (s *OptionSpec) Parse(args []string) Options {
 			// are interesting. But we don't want to complicate things too much,
 			// so we'll probably not allow winding back an argument.
 			callback = func(optionSpec *OptionSpec, option string, value *string) {
-				if !known {
-					if s.UnknownOptionsFatal {
+				unknown := func(k bool) bool {
+					if !k && s.UnknownOptionsFatal {
 						s.PrintUsageAndExit("Unkown option: " + option)
 					}
-				} else {
+					return !k
+				}
+				if presentedDash == "-" && len(presentedFlagName) > 1 { // Clustering, -abc
+					for j, shortR := range presentedFlagName {
+						short := string(shortR)
+						isLast := j == len(presentedFlagName)-1
+						canonicalC, knownC := s.aliases[short]
+						if !unknown(knownC) {
+							if s.requiresArg[canonicalC] {
+								if value == nil || !isLast {
+									s.PrintUsageAndExit("Missing argument: " + short)
+								}
+								opt.opts[canonicalC] = *value
+							} else {
+								if value != nil && isLast {
+									s.PrintUsageAndExit("Unexpected argument: " + short + ": " + *value)
+								}
+								opt.opts[canonicalC] = fmt.Sprintf("%d", opt.GetInt(canonicalC)+1)
+							}
+						}
+					}
+				} else if !unknown(known) {
 					if s.requiresArg[canonical] {
 						if value == nil {
 							s.PrintUsageAndExit("Missing argument: " + option)
@@ -398,12 +415,20 @@ func (s *OptionSpec) Parse(args []string) Options {
 			}
 		}
 
+		maybeClustering := !known && presentedDash == "-"
 		var nextArg *string = nil
 		if i < len(args)-1 {
 			nextArg = &(args[i+1])
 		}
 		needsArg := known && s.requiresArg[canonical]
-		if !known && nextArg != nil && !strings.HasPrefix(*nextArg, "-") {
+		if !known && nextArg != nil && !strings.HasPrefix(*nextArg, "-") { // best effort unknown
+			needsArg = true
+		}
+		if maybeClustering && haveSelfValue {
+			needsArg = true
+		}
+		lastClustered := string(s.aliases[presentedFlagName[len(presentedFlagName)-1:]])
+		if maybeClustering && s.requiresArg[lastClustered] {
 			needsArg = true
 		}
 		arg := func() *string {
@@ -430,11 +455,17 @@ func (s *OptionSpec) Parse(args []string) Options {
 // such as "myprog --help | less" work as the user expects.
 // Likewise, the status code is zero when no error was given.
 func (s *OptionSpec) PrintUsageAndExit(err string) {
+	printMsg := func(f io.Writer, format string, vs ...interface{}) {
+		if s.ErrorWriter != nil {
+			f = s.ErrorWriter
+		}
+		fmt.Fprintf(f, format, vs...)
+	}
 	if err == "" {
-		fmt.Println(s.Usage)
+		printMsg(os.Stdout, "%s\n", s.Usage)
 		s.Exit(0)
 	}
-	fmt.Fprintf(os.Stderr, "%s\n%s\n", err, s.Usage)
+	printMsg(os.Stderr, "%s\n%s\n", err, s.Usage)
 	s.Exit(EX_USAGE)
 }
 

@@ -13,8 +13,7 @@ func TestNewOptions_trivial(t *testing.T) {
 	ExpectEquals(t, "ccc", s.aliases["ccc"], "canonical name")
 	ExpectEquals(t, "ccc", s.aliases["a"], "alternate name")
 	ExpectEquals(t, "ccc", s.aliases["bbb"], "alternate name")
-	ExpectEquals(t, true, s.short["a"], "a is a short name")
-	ExpectEquals(t, "def", s.defaults["ccc"], "a is a short name")
+	ExpectEquals(t, "def", s.defaults["ccc"], "default value")
 	// This'll change (wrapping etc.) so it's not really worth testing too much.
 	ExpectEquals(t, "TestNewOptions_trivial\n\n  -a, --bbb, --ccc=  doc [def]\n",
 		s.Usage, "usage string")
@@ -60,9 +59,9 @@ func TestParse_trivialSelfVal(t *testing.T) {
 }
 
 func TestParse_missingArgument(t *testing.T) {
-	fmt.Println("Next message is benign")
 	s := NewOptions("TestParse_missingArgument\n--\na,bbb,ccc= doc [def]")
 	s.Exit = exitToPanic
+	s.ErrorWriter = devNull{}
 	ExpectDies(t, func() { s.Parse([]string{"--ccc"}) }, "missing required param")
 }
 
@@ -95,9 +94,9 @@ func TestParse_leftover(t *testing.T) {
 }
 
 func TestParse_unknownFlags(t *testing.T) {
-	fmt.Println("Next message is benign")
 	s := NewOptions("TestParse_unknownFlags\n--\nccc= doc [def]")
 	s.Exit = exitToPanic
+	s.ErrorWriter = devNull{}
 
 	ExpectDies(t, func() {
 		s.Parse([]string{"--ccc", "myval", "--unk"})
@@ -155,17 +154,25 @@ func TestGetAll(t *testing.T) {
 
 func TestCallbackInterface(t *testing.T) {
 	s := NewOptions("TestCallbackInterface\n--\na,bbb,ccc= doc\nddd more doc\n")
-	var (ccc string; ddd bool; unknown [][]string)
+	var (
+		ccc     string
+		ddd     bool
+		unknown [][]string
+	)
 	s.ParseCallback = func(spec *OptionSpec, option string, argument *string) {
 		if argument != nil {
 			switch option {
-				case "a", "bbb", "ccc":  ccc = *argument
-				default: unknown = append(unknown, []string{option, *argument})
+			case "a", "bbb", "ccc":
+				ccc = *argument
+			default:
+				unknown = append(unknown, []string{option, *argument})
 			}
 		} else {
 			switch option {
-				case "ddd": ddd = true
-				default: unknown = append(unknown, []string{option})
+			case "ddd":
+				ddd = true
+			default:
+				unknown = append(unknown, []string{option})
 			}
 		}
 	}
@@ -182,8 +189,50 @@ func TestCallbackInterface(t *testing.T) {
 	ExpectEquals(t, []string{"hi", "a=b"}, opt.Extra, "extra")
 }
 
+func TestClustering_simple(t *testing.T) {
+	s := NewOptions("TestClustering_simple\n--\na,bbb doc\nb,ccc doc")
+	s.Exit = exitToPanic
+	opt := s.Parse([]string{"-abbb"})
+	ExpectEquals(t, true, opt.GetBool("bbb"), "clustering - simple")
+	ExpectEquals(t, 1, opt.GetInt("bbb"), "clustering - simple")
+	ExpectEquals(t, 3, opt.GetInt("ccc"), "clustering - increment")
+}
+
+func TestClustering_smoosh(t *testing.T) {
+	s := NewOptions("TestClustering_smoosh\n--\na,bbb doc\nb,ccc= doc")
+	s.Exit = exitToPanic
+	opt := s.Parse([]string{"-aab=foo"})
+	ExpectEquals(t, 2, opt.GetInt("bbb"), "clustering - smooshing")
+	ExpectEquals(t, "foo", opt.Get("ccc"), "clustering - smooshing")
+}
+
+func TestClustering_smooshWithSpace(t *testing.T) {
+	s := NewOptions("TestClustering_smooshWithSpace\n--\na,bbb doc\nb,ccc= doc")
+	s.Exit = exitToPanic
+	opt := s.Parse([]string{"-aab", "foo"})
+	ExpectEquals(t, 2, opt.GetInt("bbb"), "clustering - smooshing with a space")
+	ExpectEquals(t, "foo", opt.Get("ccc"), "clustering - smooshing with a space")
+
+	opt = s.Parse([]string{"-aab", "-a"})
+	ExpectEquals(t, 2, opt.GetInt("bbb"), "clustering - smooshing with a space")
+	ExpectEquals(t, "-a", opt.Get("ccc"), "clustering - smooshing with a space")
+}
+
+func TestClustering_missingArg(t *testing.T) {
+	s := NewOptions("TestClustering_missingArg\n--\na,bbb doc\nb,ccc= doc")
+	s.Exit = exitToPanic
+	s.ErrorWriter = devNull{}
+	ExpectDies(t, func() { s.Parse([]string{"-aab"}) })
+}
+
 func exitToPanic(code int) {
 	panic(fmt.Sprintf("exiting with code: %d", code))
+}
+
+type devNull struct{}
+
+func (d devNull) Write(p []byte) (n int, err error) {
+	return len(p), nil
 }
 
 // These are little testing utilities that I like. May move to a separate module one day.
@@ -200,9 +249,10 @@ func ExpectEquals(t *testing.T, expected, actual interface{}, desc ...string) {
 }
 
 func ExpectDies(t *testing.T, f func(), desc ...string) {
+	_, file, line, _ := runtime.Caller(1)
 	defer func() {
 		if x := recover(); x == nil {
-			t.Errorf("%v\nExpected panic\n", desc)
+			t.Errorf("%v\nExpected panic:%s:%d\n", desc, file, line)
 		}
 	}()
 	f()
