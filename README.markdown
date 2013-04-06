@@ -1,15 +1,16 @@
 go-options - command line parsing library for Go
 ================================================
 
-To install: go get github.com/gaal/go-options/options
-
 * Easy to use - no boilerplate
 * Self-documenting - the spec turns into the usage string
 * Powerful - doesn't do everything you ever dreamed of, but comes close
 * Flexible - if you want control over parsing, provide your own callback.
 
+Install: `go get github.com/gaal/go-options/options`  
+Doc: `godoc` [github.com/gaal/go-options/options](http://godoc.org/github.com/gaal/go-options/options)
+
 This design is inspired by `git rev-parse --parseopt` and the discussion of
-`bup.options` here: <http://apenwarr.ca/log/?m=201111#02>. There are some
+`bup.options` [here](http://apenwarr.ca/log/?m=201111#02). There are some
 minor deviations.
 
 * On the code side, you must access the opt structure with canonical option
