@@ -371,6 +371,7 @@ func (s *OptionSpec) Parse(args []string) Options {
 				unknown := func(k bool) bool {
 					if !k && s.UnknownOptionsFatal {
 						s.PrintUsageAndExit("Unkown option: " + option)
+						return true // not reached
 					}
 					return !k
 				}
@@ -383,11 +384,13 @@ func (s *OptionSpec) Parse(args []string) Options {
 							if s.requiresArg[canonicalC] {
 								if value == nil || !isLast {
 									s.PrintUsageAndExit("Missing argument: " + short)
+									return // not reached
 								}
 								opt.opts[canonicalC] = *value
 							} else {
 								if value != nil && isLast {
 									s.PrintUsageAndExit("Unexpected argument: " + short + ": " + *value)
+									return // not reached
 								}
 								opt.opts[canonicalC] = fmt.Sprintf("%d", opt.GetInt(canonicalC)+1)
 							}
@@ -397,6 +400,7 @@ func (s *OptionSpec) Parse(args []string) Options {
 					if s.requiresArg[canonical] {
 						if value == nil {
 							s.PrintUsageAndExit("Missing argument: " + option)
+							return // not reached
 						}
 						opt.opts[canonical] = *value
 					} else {
